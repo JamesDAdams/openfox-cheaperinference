@@ -5,6 +5,7 @@ import type { CheaperInferencePluginSettings } from './types.js'
 export type { CheaperInferencePluginSettings } from './types.js'
 
 export const DEFAULT_SETTINGS: CheaperInferencePluginSettings = {
+  apiKey: '',
   checkModelsOnStartup: true,
   modelsRefreshIntervalMinutes: 60,
   checkPricesOnStartup: true,

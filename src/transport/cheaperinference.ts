@@ -19,6 +19,13 @@ export interface CheaperInferenceTransportOptions {
   fetcher?: typeof fetch
 }
 
+function roundUpTo3Decimals(val: number | undefined): number | undefined {
+  if (val === undefined || isNaN(val)) return undefined
+  if (val === 0) return 0
+  const scaled = Math.round(val * 1e8) / 1e5
+  return Math.ceil(scaled) / 1000
+}
+
 export class CheaperInferenceTransportAdapter implements ProviderTransportAdapter {
   readonly id = 'cheaperinference-transport'
 
@@ -46,13 +53,50 @@ export class CheaperInferenceTransportAdapter implements ProviderTransportAdapte
         .filter((m) => m.model_type !== 'image' && m.model_type !== 'video')
         .map((m) => {
           const pricing: ModelPricing = {}
-          if (m.input_per_million) pricing.input = parseFloat(m.input_per_million)
-          if (m.output_per_million) pricing.output = parseFloat(m.output_per_million)
-          if (m.cache_read_per_million) pricing.cacheRead = parseFloat(m.cache_read_per_million)
-          if (m.cache_write_per_million) pricing.cacheWrite = parseFloat(m.cache_write_per_million)
-          if (showDiscount && m.discount_percent) {
-            const discNum = parseFloat(m.discount_percent)
-            pricing.discount = !isNaN(discNum) ? discNum : m.discount_percent
+
+          if (showDiscount) {
+            const discNum = m.discount_percent ? parseFloat(m.discount_percent) : 0
+            const hasDiscount = !isNaN(discNum) && discNum > 0 && discNum < 100
+            const factor = hasDiscount ? 1 - discNum / 100 : 1
+
+            if (hasDiscount) {
+              pricing.discount = discNum
+            } else if (m.discount_percent) {
+              pricing.discount = m.discount_percent
+            }
+
+            if (m.reference_input_per_million) {
+              pricing.input = roundUpTo3Decimals(parseFloat(m.reference_input_per_million))
+            } else if (m.input_per_million) {
+              const discounted = parseFloat(m.input_per_million)
+              pricing.input = roundUpTo3Decimals(hasDiscount ? discounted / factor : discounted)
+            }
+
+            if (m.reference_output_per_million) {
+              pricing.output = roundUpTo3Decimals(parseFloat(m.reference_output_per_million))
+            } else if (m.output_per_million) {
+              const discounted = parseFloat(m.output_per_million)
+              pricing.output = roundUpTo3Decimals(hasDiscount ? discounted / factor : discounted)
+            }
+
+            if (m.reference_cache_read_per_million) {
+              pricing.cacheRead = roundUpTo3Decimals(parseFloat(m.reference_cache_read_per_million))
+            } else if (m.cache_read_per_million) {
+              const discounted = parseFloat(m.cache_read_per_million)
+              pricing.cacheRead = roundUpTo3Decimals(hasDiscount ? discounted / factor : discounted)
+            }
+
+            if (m.reference_cache_write_per_million) {
+              pricing.cacheWrite = roundUpTo3Decimals(parseFloat(m.reference_cache_write_per_million))
+            } else if (m.cache_write_per_million) {
+              const discounted = parseFloat(m.cache_write_per_million)
+              pricing.cacheWrite = roundUpTo3Decimals(hasDiscount ? discounted / factor : discounted)
+            }
+          } else {
+            if (m.input_per_million) pricing.input = roundUpTo3Decimals(parseFloat(m.input_per_million))
+            if (m.output_per_million) pricing.output = roundUpTo3Decimals(parseFloat(m.output_per_million))
+            if (m.cache_read_per_million) pricing.cacheRead = roundUpTo3Decimals(parseFloat(m.cache_read_per_million))
+            if (m.cache_write_per_million) pricing.cacheWrite = roundUpTo3Decimals(parseFloat(m.cache_write_per_million))
           }
 
           const hasPricing = Object.keys(pricing).length > 0
@@ -280,6 +324,11 @@ export class CheaperInferenceTransportAdapter implements ProviderTransportAdapte
 
   private async resolveKey(context: ProviderRequestContext): Promise<string | undefined> {
     if (context.auth?.accessToken) return context.auth.accessToken
-    return this.auth.resolveApiKey(context)
+    const fromAuth = await this.auth.resolveApiKey(context)
+    if (fromAuth) return fromAuth
+    const settings = this.settingsStore?.getCached()
+    if (settings?.apiKey) return settings.apiKey
+    if (process.env.CHEAPERINFERENCE_API_KEY) return process.env.CHEAPERINFERENCE_API_KEY
+    return undefined
   }
 }

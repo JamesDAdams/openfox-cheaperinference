@@ -60,6 +60,13 @@ export async function register(registry: ProviderPluginRegistry): Promise<void> 
       description: 'Configure models discovery, discount display and dynamic API pricing periodic synchronization.',
       fields: [
         {
+          key: 'apiKey',
+          label: 'CheaperInference API Key',
+          type: 'text',
+          description: 'API key (sk-...) used for chat completions and model synchronization.',
+          defaultValue: '',
+        },
+        {
           key: 'showDiscount',
           label: 'Show model discount badges & prices',
           type: 'boolean',

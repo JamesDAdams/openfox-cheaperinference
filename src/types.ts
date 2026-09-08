@@ -1,4 +1,6 @@
 export interface CheaperInferencePluginSettings {
+  /** API key for CheaperInference */
+  apiKey?: string
   /** Check models on startup */
   checkModelsOnStartup: boolean
   /** Interval in minutes between model updates */
@@ -34,6 +36,10 @@ export interface CheaperInferenceModelApiItem {
   output_per_million?: string | null
   cache_read_per_million?: string | null
   cache_write_per_million?: string | null
+  reference_input_per_million?: string | null
+  reference_output_per_million?: string | null
+  reference_cache_read_per_million?: string | null
+  reference_cache_write_per_million?: string | null
   discount_percent?: string | null
   provider_name?: string
   supports_vision?: boolean

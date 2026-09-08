@@ -65,9 +65,22 @@ export class CheaperInferenceAuthAdapter implements ProviderAuthAdapter {
 
   async resolveApiKey(context: ProviderRequestContext | ProviderAccessContext): Promise<string | undefined> {
     const credRef = (context as any).provider?.credentialRef ?? (context as any).credentialRef
-    if (!credRef) return undefined
-    const cred = (await this.credentials.get(credRef)) as CheaperInferenceCredential | undefined
-    return cred?.apiKey
+    if (credRef) {
+      const cred = (await this.credentials.get(credRef)) as CheaperInferenceCredential | undefined
+      if (cred?.apiKey) return cred.apiKey
+    }
+
+    const directKey =
+      (context as any).apiKey ??
+      (context as any).provider?.apiKey ??
+      (context as any).auth?.accessToken
+    if (directKey) return directKey
+
+    if (process.env.CHEAPERINFERENCE_API_KEY) {
+      return process.env.CHEAPERINFERENCE_API_KEY
+    }
+
+    return undefined
   }
 
   async saveApiKey(apiKey: string): Promise<string> {

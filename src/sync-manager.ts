@@ -10,10 +10,33 @@ export interface PriceDiff {
   newPricing?: ModelPricing
 }
 
+function roundUpTo3Decimals(val: number | undefined): number | undefined {
+  if (val === undefined || isNaN(val)) return undefined
+  if (val === 0) return 0
+  const scaled = Math.round(val * 1e8) / 1e5
+  return Math.ceil(scaled) / 1000
+}
+
+function formatPriceValue(val: number | undefined): string {
+  if (val === undefined || val === null || isNaN(val)) return 'none'
+  if (val === 0) return '$0'
+
+  const rounded = roundUpTo3Decimals(val) ?? 0
+  return `$${rounded.toFixed(3)}`
+}
+
 function formatDiscountValue(val: number | string | undefined): string {
   if (val === undefined || val === null || val === '') return 'none'
+  if (typeof val === 'number') {
+    return `${Math.round(val)}%`
+  }
   const str = String(val).trim()
-  return str.endsWith('%') ? str : `${str}%`
+  if (str.endsWith('%')) {
+    const num = parseFloat(str.slice(0, -1))
+    return isNaN(num) ? str : `${Math.round(num)}%`
+  }
+  const num = parseFloat(str)
+  return isNaN(num) ? `${str}%` : `${Math.round(num)}%`
 }
 
 export function formatPriceDiffBody(priceDiffs: PriceDiff[], maxModels = 2): string {
@@ -25,45 +48,35 @@ export function formatPriceDiffBody(priceDiffs: PriceDiff[], maxModels = 2): str
     const newP = diff.newPricing ?? {}
 
     if (oldP.input !== newP.input) {
-      const oldVal = oldP.input !== undefined ? `$${oldP.input}` : 'none'
-      const newVal = newP.input !== undefined ? `$${newP.input}` : 'none'
-      changes.push(`in ${oldVal}->${newVal}`)
+      changes.push(`• In: ${formatPriceValue(oldP.input)} → ${formatPriceValue(newP.input)}`)
     }
 
     if (oldP.output !== newP.output) {
-      const oldVal = oldP.output !== undefined ? `$${oldP.output}` : 'none'
-      const newVal = newP.output !== undefined ? `$${newP.output}` : 'none'
-      changes.push(`out ${oldVal}->${newVal}`)
+      changes.push(`• Out: ${formatPriceValue(oldP.output)} → ${formatPriceValue(newP.output)}`)
     }
 
     if (oldP.cacheRead !== newP.cacheRead) {
-      const oldVal = oldP.cacheRead !== undefined ? `$${oldP.cacheRead}` : 'none'
-      const newVal = newP.cacheRead !== undefined ? `$${newP.cacheRead}` : 'none'
-      changes.push(`cacheRead ${oldVal}->${newVal}`)
+      changes.push(`• Cache Read: ${formatPriceValue(oldP.cacheRead)} → ${formatPriceValue(newP.cacheRead)}`)
     }
 
     if (oldP.cacheWrite !== newP.cacheWrite) {
-      const oldVal = oldP.cacheWrite !== undefined ? `$${oldP.cacheWrite}` : 'none'
-      const newVal = newP.cacheWrite !== undefined ? `$${newP.cacheWrite}` : 'none'
-      changes.push(`cacheWrite ${oldVal}->${newVal}`)
+      changes.push(`• Cache Write: ${formatPriceValue(oldP.cacheWrite)} → ${formatPriceValue(newP.cacheWrite)}`)
     }
 
     if (oldP.discount !== newP.discount) {
-      const oldVal = formatDiscountValue(oldP.discount)
-      const newVal = formatDiscountValue(newP.discount)
-      changes.push(`promo ${oldVal}->${newVal}`)
+      changes.push(`• Promo: ${formatDiscountValue(oldP.discount)} → ${formatDiscountValue(newP.discount)}`)
     }
 
-    const detail = changes.length > 0 ? changes.join(', ') : 'pricing updated'
-    return `${diff.modelId}: ${detail}`
+    const detail = changes.length > 0 ? changes.join('\n') : '• Pricing updated'
+    return `${diff.modelId}:\n${detail}`
   })
 
   const remaining = priceDiffs.length - maxModels
   if (remaining > 0) {
-    return `${formattedModels.join('; ')} (+${remaining} others)`
+    return `${formattedModels.join('\n\n')}\n\n(+${remaining} other${remaining > 1 ? 's' : ''})`
   }
 
-  return formattedModels.join('; ')
+  return formattedModels.join('\n\n')
 }
 
 export interface SyncManagerOptions {

@@ -1,0 +1,32 @@
+{
+  "name": "openfox-cheaperinference",
+  "version": "1.0.0",
+  "description": "CheaperInference model provider plugin for OpenFox with dynamic pricing and discount support.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "openfox": {
+    "apiVersion": 1,
+    "plugin": "./dist/index.js"
+  },
+  "peerDependencies": {
+    "openfox": ">=2.0.56 <3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  },
+  "license": "MIT"
+}

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type {
   ProviderTransportAdapter,
   ProviderRequestContext,
@@ -17,6 +19,7 @@ const CHEAPERINFERENCE_DEFAULT_BASE_URL = 'https://api.cheaperinference.com/v1'
 export interface CheaperInferenceTransportOptions {
   publicModelsUrl?: string
   fetcher?: typeof fetch
+  configDirectory?: string
 }
 
 function roundUpTo3Decimals(val: number | undefined): number | undefined {
@@ -328,6 +331,34 @@ export class CheaperInferenceTransportAdapter implements ProviderTransportAdapte
     if (fromAuth) return fromAuth
     const settings = this.settingsStore?.getCached()
     if (settings?.apiKey) return settings.apiKey
+
+    if (this.options.configDirectory) {
+      try {
+        const configPath = join(this.options.configDirectory, 'config.json')
+        const raw = await readFile(configPath, 'utf8')
+        const data = JSON.parse(raw) as {
+          providers?: Array<{
+            id: string
+            apiKey?: string
+            transportAdapter?: string
+            url?: string
+          }>
+        }
+        const providerId = context.providerId
+        const provider = data.providers?.find((p) =>
+          providerId
+            ? p.id === providerId
+            : p.transportAdapter === 'cheaperinference-transport' ||
+              p.url?.includes('cheaperinference'),
+        )
+        if (provider?.apiKey) {
+          return provider.apiKey
+        }
+      } catch {
+        // config.json not readable or not present
+      }
+    }
+
     if (process.env.CHEAPERINFERENCE_API_KEY) return process.env.CHEAPERINFERENCE_API_KEY
     return undefined
   }

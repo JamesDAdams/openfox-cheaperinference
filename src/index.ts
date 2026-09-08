@@ -28,7 +28,8 @@ export { CheaperInferenceSyncManager, type PriceDiff, type SyncManagerOptions } 
 export { PluginSettingsStore, DEFAULT_SETTINGS, type CheaperInferencePluginSettings } from './settings.js'
 
 export async function register(registry: ProviderPluginRegistry): Promise<void> {
-  const storageDir = join(registry.runtime.configDirectory, 'plugins', 'openfox-cheaperinference')
+  const configDir = registry.runtime.configDirectory
+  const storageDir = join(configDir, 'plugins', 'openfox-cheaperinference')
   const settingsStore = new PluginSettingsStore(join(storageDir, 'settings.json'))
   const initialSettings = await settingsStore.load()
 
@@ -37,7 +38,9 @@ export async function register(registry: ProviderPluginRegistry): Promise<void> 
     join(storageDir, 'credentials.key'),
   )
   const auth = new CheaperInferenceAuthAdapter(credentials)
-  const transport = new CheaperInferenceTransportAdapter(auth, settingsStore)
+  const transport = new CheaperInferenceTransportAdapter(auth, settingsStore, {
+    configDirectory: configDir,
+  })
 
   const syncManager = new CheaperInferenceSyncManager({
     transport,

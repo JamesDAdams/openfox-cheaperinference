@@ -16,7 +16,7 @@ export class CheaperInferenceAuthAdapter implements ProviderAuthAdapter {
 
   constructor(private readonly credentials: ProviderCredentialStore) {}
 
-  async beginLogin(_context: { providerId: string }): Promise<{
+  async beginLogin(context: { providerId: string; apiKey?: string }): Promise<{
     challenge: ProviderLoginChallenge
     completion: Promise<{ credentialRef: string }>
   }> {
@@ -24,25 +24,35 @@ export class CheaperInferenceAuthAdapter implements ProviderAuthAdapter {
     const instructions =
       'Create or copy your API key from CheaperInference Dashboard (https://platform.cheaperinference.com/keys) and paste it into OpenFox.'
 
+    const apiKey = context.apiKey || process.env.CHEAPERINFERENCE_API_KEY
+
     const challenge: ProviderLoginChallenge = {
       verificationUrl: directUrl,
       directUrl,
       instructions,
-      mode: 'browser',
+      mode: 'external',
     }
 
-    const completion = Promise.reject(
-      new Error('Please configure the API key in the provider settings.'),
-    )
+    if (apiKey) {
+      const credentialRef = await this.credentials.create({ apiKey })
+      return { challenge, completion: Promise.resolve({ credentialRef }) }
+    }
 
-    return { challenge, completion }
+    return {
+      challenge,
+      completion: Promise.resolve({ credentialRef: '' }),
+    }
   }
 
   async getStatus(context: { providerId: string; credentialRef?: string }): Promise<ProviderAuthStatus> {
-    if (!context.credentialRef) return { state: 'disconnected' }
-    const cred = (await this.credentials.get(context.credentialRef)) as CheaperInferenceCredential | undefined
-    if (!cred?.apiKey) return { state: 'disconnected' }
-    return { state: 'connected' }
+    if (context.credentialRef) {
+      const cred = (await this.credentials.get(context.credentialRef)) as CheaperInferenceCredential | undefined
+      if (cred?.apiKey) return { state: 'connected', accountLabel: 'CheaperInference Account' }
+    }
+    if (process.env.CHEAPERINFERENCE_API_KEY) {
+      return { state: 'connected', accountLabel: 'Environment Variable (CHEAPERINFERENCE_API_KEY)' }
+    }
+    return { state: 'disconnected' }
   }
 
   async getAccessContext(credentialRef: string): Promise<ProviderAccessContext> {

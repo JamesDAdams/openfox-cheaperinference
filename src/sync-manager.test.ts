@@ -134,9 +134,11 @@ describe('CheaperInferenceSyncManager notification formatting', () => {
     await syncManager.syncAll()
 
     expect(notifyMock).toHaveBeenCalledTimes(1)
+    const body = 'gpt-4o:\n• In: $5.000 → $2.500\n• Out: $15.000 → $10.000\n• Promo: 0% → 20%'
     expect(notifyMock).toHaveBeenCalledWith({
-      title: 'CheaperInference Pricing Updated',
-      body: 'gpt-4o:\n• In: $5.000 → $2.500\n• Out: $15.000 → $10.000\n• Promo: 0% → 20%',
+      title: { en: 'CheaperInference Pricing Updated', fr: 'Prix CheaperInference mis à jour' },
+      body: { en: body, fr: body },
+      level: 'info',
     })
   })
 })

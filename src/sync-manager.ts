@@ -79,10 +79,16 @@ export function formatPriceDiffBody(priceDiffs: PriceDiff[], maxModels = 2): str
   return formattedModels.join('\n\n')
 }
 
+export interface SyncNotification {
+  title: string | { en: string; fr: string }
+  body?: string | { en: string; fr: string }
+  level?: 'info' | 'success' | 'warning' | 'error'
+}
+
 export interface SyncManagerOptions {
   transport: CheaperInferenceTransportAdapter
   settings: CheaperInferencePluginSettings
-  notify?: (notification: { title: string; body: string }) => void
+  notify?: (notification: SyncNotification) => void
 }
 
 export class CheaperInferenceSyncManager {
@@ -138,67 +144,63 @@ export class CheaperInferenceSyncManager {
     const models = (await this.options.transport.listModels(dummyContext as any)) as ModelWithPricing[]
     const currentIds = new Set(models.map((m) => m.id))
     const priceDiffs: PriceDiff[] = []
+    const newModels: string[] = []
+    const removedModels: string[] = []
 
     if (this.isInitialized) {
-      const newModels: string[] = []
-      const removedModels: string[] = []
-
       for (const id of currentIds) {
-        if (!this.knownModelIds.has(id)) {
-          newModels.push(id)
-        }
+        if (!this.knownModelIds.has(id)) newModels.push(id)
       }
-
       for (const id of this.knownModelIds) {
-        if (!currentIds.has(id)) {
-          removedModels.push(id)
+        if (!currentIds.has(id)) removedModels.push(id)
+      }
+      for (const model of models) {
+        if (!model.pricing) continue
+        const previous = this.knownModelPricing.get(model.id)
+        if (previous && JSON.stringify(previous) !== JSON.stringify(model.pricing)) {
+          priceDiffs.push({ modelId: model.id, oldPricing: previous, newPricing: model.pricing })
         }
       }
-
-      for (const m of models) {
-        if (m.pricing) {
-          const prev = this.knownModelPricing.get(m.id)
-          if (prev && JSON.stringify(prev) !== JSON.stringify(m.pricing)) {
-            priceDiffs.push({ modelId: m.id, oldPricing: prev, newPricing: m.pricing })
-          }
-        }
-      }
-
-      this.lastDiscoveredModels = newModels
-      this.lastRemovedModels = removedModels
-      this.lastPriceDiffs = priceDiffs
-
-      if (this.options.notify) {
-        if (newModels.length > 0 || removedModels.length > 0) {
-          const parts: string[] = []
-          if (newModels.length > 0) parts.push(`New: ${newModels.slice(0, 3).join(', ')}${newModels.length > 3 ? '...' : ''}`)
-          if (removedModels.length > 0) parts.push(`Removed: ${removedModels.slice(0, 3).join(', ')}${removedModels.length > 3 ? '...' : ''}`)
-          this.options.notify({
-            title: 'CheaperInference Models Updated',
-            body: parts.join(' | '),
-          })
-        } else if (priceDiffs.length > 0 && this.options.settings.notifyOnPriceChanges) {
-          this.options.notify({
-            title: 'CheaperInference Pricing Updated',
-            body: formatPriceDiffBody(priceDiffs),
-          })
-        } else if (this.options.settings.notifyOnEveryCheck) {
-          this.options.notify({
-            title: 'CheaperInference Check Completed',
-            body: `${models.length} models verified`,
-          })
-        }
-      }
-    } else {
-      this.isInitialized = true
     }
 
+    this.lastDiscoveredModels = newModels
+    this.lastRemovedModels = removedModels
+    this.lastPriceDiffs = priceDiffs
+
+    if (this.options.notify) {
+      if (newModels.length > 0 || removedModels.length > 0) {
+        const parts: string[] = []
+        if (newModels.length > 0) parts.push(`New: ${newModels.slice(0, 3).join(', ')}${newModels.length > 3 ? '...' : ''}`)
+        if (removedModels.length > 0) parts.push(`Removed: ${removedModels.slice(0, 3).join(', ')}${removedModels.length > 3 ? '...' : ''}`)
+        this.options.notify({
+          title: { en: 'CheaperInference Models Updated', fr: 'Modèles CheaperInference mis à jour' },
+          body: { en: parts.join(' | '), fr: parts.join(' | ') },
+          level: 'info',
+        })
+      } else if (priceDiffs.length > 0 && this.options.settings.notifyOnPriceChanges) {
+        const body = formatPriceDiffBody(priceDiffs)
+        this.options.notify({
+          title: { en: 'CheaperInference Pricing Updated', fr: 'Prix CheaperInference mis à jour' },
+          body: { en: body, fr: body },
+          level: 'info',
+        })
+      } else if (this.options.settings.notifyOnEveryCheck) {
+        this.options.notify({
+          title: { en: 'CheaperInference Check Completed', fr: 'Vérification CheaperInference terminée' },
+          body: {
+            en: `${models.length} models verified. No pricing changes.`,
+            fr: `${models.length} modèles vérifiés. Aucun changement de prix.`,
+          },
+          level: 'info',
+        })
+      }
+    }
+
+    this.isInitialized = true
     this.knownModelIds = currentIds
     this.knownModelPricing.clear()
-    for (const m of models) {
-      if (m.pricing) {
-        this.knownModelPricing.set(m.id, m.pricing)
-      }
+    for (const model of models) {
+      if (model.pricing) this.knownModelPricing.set(model.id, model.pricing)
     }
 
     return { models, priceDiffs }

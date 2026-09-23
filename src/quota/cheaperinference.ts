@@ -710,6 +710,9 @@ export class CheaperInferenceQuotaProvider implements QuotaProvider {
     if (registry && typeof registry.registerCustomQuotaSection === 'function') {
       registry.registerCustomQuotaSection(customSection)
     }
+
+    // 4. Eagerly sync quota sources with openfox-quota
+    void this.getQuota().catch(() => {})
   }
 
   private submitSourcesToGlobalManager(

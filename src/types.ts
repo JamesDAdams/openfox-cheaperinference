@@ -17,6 +17,10 @@ export interface CheaperInferencePluginSettings {
   notifyOnEveryCheck: boolean
   /** Whether to surface and calculate discounts for models (default: true) */
   showDiscount: boolean
+  /** Automatically add new models to configured provider */
+  autoAddModels?: boolean
+  /** Automatically remove deleted models from configured provider */
+  autoRemoveModels?: boolean
 }
 
 export interface ModelPricing {

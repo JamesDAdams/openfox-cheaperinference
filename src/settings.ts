@@ -13,6 +13,8 @@ export const DEFAULT_SETTINGS: CheaperInferencePluginSettings = {
   notifyOnPriceChanges: true,
   notifyOnEveryCheck: false,
   showDiscount: true,
+  autoAddModels: true,
+  autoRemoveModels: false,
 }
 
 export class PluginSettingsStore {

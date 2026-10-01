@@ -57,9 +57,10 @@ export async function register(registry: ProviderPluginRegistry): Promise<void> 
   const transport = new CheaperInferenceTransportAdapter(auth, settingsStore, {
     configDirectory: configDir,
   })
+  const pluginCtx = (registry as any).context
   const notify =
-    typeof (registry as any).context?.notify === 'function'
-      ? (registry as any).context.notify.bind((registry as any).context)
+    pluginCtx && typeof pluginCtx.notify === 'function'
+      ? pluginCtx.notify.bind(pluginCtx)
       : typeof (registry as any).notify === 'function'
         ? (registry as any).notify.bind(registry)
         : undefined
@@ -67,6 +68,7 @@ export async function register(registry: ProviderPluginRegistry): Promise<void> 
   const syncManager = new CheaperInferenceSyncManager({
     transport,
     settings: initialSettings,
+    configDirectory: configDir,
     ...(notify ? { notify } : {}),
   })
   syncManager.start()
@@ -202,6 +204,32 @@ export async function register(registry: ProviderPluginRegistry): Promise<void> 
         fr: 'Configurer la découverte des modèles, l’affichage des réductions et la synchronisation périodique des prix.',
       },
       fields: [
+        {
+          key: 'autoAddModels',
+          label: {
+            en: 'Auto-add new models to provider',
+            fr: 'Ajouter automatiquement les nouveaux modèles',
+          },
+          type: 'boolean',
+          description: {
+            en: 'Automatically add newly discovered models to your configured provider in OpenFox.',
+            fr: 'Ajouter automatiquement les nouveaux modèles découverts à votre fournisseur configuré dans OpenFox.',
+          },
+          default: true,
+        },
+        {
+          key: 'autoRemoveModels',
+          label: {
+            en: 'Auto-remove deleted models from provider',
+            fr: 'Retirer automatiquement les modèles supprimés',
+          },
+          type: 'boolean',
+          description: {
+            en: 'Automatically remove models that are no longer available from your configured provider in OpenFox.',
+            fr: 'Retirer automatiquement de votre fournisseur configuré les modèles qui ne sont plus disponibles.',
+          },
+          default: false,
+        },
         {
           key: 'showDiscount',
           label: {

@@ -312,7 +312,6 @@ describe('CheaperInferenceQuotaProvider', () => {
     const pending = (globalThis as any)[pendingKey]
     expect(pending).toContain(provider)
     expect(globalQuotaManager.registerProvider).toHaveBeenCalledWith(provider)
-    expect(globalQuotaManager.registerCustomSection).toHaveBeenCalled()
   })
 
   it('provides wallet and piggy bank icons and value display mode on metrics', async () => {

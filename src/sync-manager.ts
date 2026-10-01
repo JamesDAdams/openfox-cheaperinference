@@ -1,3 +1,6 @@
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { ModelConfig } from 'openfox/provider'
 import type { CheaperInferenceTransportAdapter } from './transport/cheaperinference.js'
 import type { CheaperInferencePluginSettings, ModelPricing } from './types.js'
@@ -8,6 +11,111 @@ export interface PriceDiff {
   modelId: string
   oldPricing?: ModelPricing
   newPricing?: ModelPricing
+}
+
+function getCandidateConfigDirs(explicitDir?: string): string[] {
+  if (explicitDir) {
+    return [explicitDir]
+  }
+  const dirs: string[] = []
+  if (process.env.OPENFOX_CONFIG_DIR) dirs.push(process.env.OPENFOX_CONFIG_DIR)
+  try {
+    const home = homedir()
+    if (home) {
+      dirs.push(join(home, 'Library', 'Application Support', 'openfox-dev'))
+      dirs.push(join(home, 'Library', 'Application Support', 'openfox'))
+      dirs.push(join(home, '.config', 'openfox-dev'))
+      dirs.push(join(home, '.config', 'openfox'))
+    }
+  } catch {}
+  return Array.from(new Set(dirs))
+}
+
+export async function syncCheaperInferenceConfigProviders(
+  models: ModelConfig[],
+  removedModelIds: string[],
+  settings: CheaperInferencePluginSettings,
+  configDirectory?: string,
+): Promise<{ added: number; removed: number }> {
+  const autoAdd = settings.autoAddModels !== false
+  const autoRemove = Boolean(settings.autoRemoveModels)
+  if (!autoAdd && !autoRemove) return { added: 0, removed: 0 }
+
+  const candidateDirs = getCandidateConfigDirs(configDirectory)
+  let totalAdded = 0
+  let totalRemoved = 0
+
+  for (const dir of candidateDirs) {
+    try {
+      const configPath = join(dir, 'config.json')
+      const raw = await readFile(configPath, 'utf8')
+      const config = JSON.parse(raw)
+      if (!Array.isArray(config?.providers)) continue
+
+      let changed = false
+      for (const p of config.providers) {
+        if (!p || typeof p !== 'object') continue
+        const backend = String(p.backend || '').toLowerCase()
+        const transport = String(p.transport || p.transportAdapter || '').toLowerCase()
+        const preset = String(p.preset || '').toLowerCase()
+        const authAdapter = String(p.authAdapter || '').toLowerCase()
+        const url = String(p.url || '').toLowerCase()
+        const name = String(p.name || '').toLowerCase()
+        const id = String(p.id || '').toLowerCase()
+
+        const isMatch =
+          preset === 'cheaperinference' ||
+          backend === 'cheaperinference' ||
+          transport === 'cheaperinference-transport' ||
+          authAdapter === 'cheaperinference-auth' ||
+          url.includes('cheaperinference') ||
+          name.includes('cheaper') ||
+          id.includes('cheaper')
+
+        if (!isMatch) continue
+
+        p.models = Array.isArray(p.models) ? p.models : []
+        const existingIds = new Set(p.models.map((m: any) => (typeof m === 'string' ? m : m.id)))
+
+        if (autoAdd && models.length > 0) {
+          for (const m of models) {
+            if (!existingIds.has(m.id)) {
+              p.models.push({
+                id: m.id,
+                name: m.name ?? m.id,
+                contextWindow: m.contextWindow ?? 128000,
+                source: 'backend',
+                ...(m.supportsVision ? { supportsVision: m.supportsVision } : {}),
+                ...(m.requestBody ? { requestBody: m.requestBody } : {}),
+                ...((m as any).pricing ? { pricing: (m as any).pricing } : {}),
+              })
+              existingIds.add(m.id)
+              totalAdded++
+              changed = true
+            }
+          }
+        }
+
+        if (autoRemove && removedModelIds.length > 0) {
+          const toRemove = new Set(removedModelIds)
+          const prevCount = p.models.length
+          p.models = p.models.filter((m: any) => !toRemove.has(typeof m === 'string' ? m : m.id))
+          if (p.models.length !== prevCount) {
+            totalRemoved += prevCount - p.models.length
+            changed = true
+          }
+        }
+      }
+
+      if (changed) {
+        await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+      }
+    } catch {
+      // Ignore config read/parse/write errors
+    }
+  }
+
+  return { added: totalAdded, removed: totalRemoved }
 }
 
 function roundUpTo3Decimals(val: number | undefined): number | undefined {
@@ -89,6 +197,7 @@ export interface SyncManagerOptions {
   transport: CheaperInferenceTransportAdapter
   settings: CheaperInferencePluginSettings
   notify?: (notification: SyncNotification) => void
+  configDirectory?: string
 }
 
 export class CheaperInferenceSyncManager {
@@ -201,6 +310,15 @@ export class CheaperInferenceSyncManager {
     this.knownModelPricing.clear()
     for (const model of models) {
       if (model.pricing) this.knownModelPricing.set(model.id, model.pricing)
+    }
+
+    if (this.options.settings.autoAddModels !== false || (this.options.settings.autoRemoveModels && removedModels.length > 0)) {
+      await syncCheaperInferenceConfigProviders(
+        models,
+        removedModels,
+        this.options.settings,
+        this.options.configDirectory,
+      ).catch(() => {})
     }
 
     return { models, priceDiffs }

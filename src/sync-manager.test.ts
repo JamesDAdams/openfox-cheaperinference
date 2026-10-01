@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CheaperInferenceSyncManager, formatPriceDiffBody } from './sync-manager.js'
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { CheaperInferenceSyncManager, formatPriceDiffBody, syncCheaperInferenceConfigProviders } from './sync-manager.js'
+import { DEFAULT_SETTINGS } from './settings.js'
 import type { ModelConfig } from 'openfox/provider'
 
 describe('CheaperInferenceSyncManager notification formatting', () => {
@@ -140,5 +144,72 @@ describe('CheaperInferenceSyncManager notification formatting', () => {
       body: { en: body, fr: body },
       level: 'info',
     })
+  })
+
+  it('automatically adds new models to config.json when autoAddModels is true', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'cheaper-sync-test-'))
+    const configPath = join(tempDir, 'config.json')
+    const initialConfig = {
+      providers: [
+        {
+          id: 'cheaper-1',
+          name: 'Cheaper Inference',
+          preset: 'cheaperinference',
+          backend: 'openai',
+          models: [{ id: 'gpt-4o', name: 'GPT-4o' }],
+        },
+      ],
+    }
+    await writeFile(configPath, JSON.stringify(initialConfig, null, 2))
+
+    const newModels = [
+      { id: 'gpt-4o', name: 'GPT-4o' },
+      { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', contextWindow: 200000 },
+    ]
+
+    const result = await syncCheaperInferenceConfigProviders(newModels as any, [], DEFAULT_SETTINGS, tempDir)
+    expect(result.added).toBe(1)
+
+    const updatedRaw = await readFile(configPath, 'utf8')
+    const updated = JSON.parse(updatedRaw)
+    expect(updated.providers[0].models).toHaveLength(2)
+    expect(updated.providers[0].models.map((m: any) => m.id)).toEqual(['gpt-4o', 'claude-3-5-sonnet'])
+
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('automatically removes deleted models from config.json when autoRemoveModels is true', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'cheaper-sync-test-'))
+    const configPath = join(tempDir, 'config.json')
+    const initialConfig = {
+      providers: [
+        {
+          id: 'cheaper-1',
+          name: 'Cheaper Inference',
+          preset: 'cheaperinference',
+          backend: 'openai',
+          models: [
+            { id: 'gpt-4o', name: 'GPT-4o' },
+            { id: 'old-deprecated-model', name: 'Old Model' },
+          ],
+        },
+      ],
+    }
+    await writeFile(configPath, JSON.stringify(initialConfig, null, 2))
+
+    const result = await syncCheaperInferenceConfigProviders(
+      [],
+      ['old-deprecated-model'],
+      { ...DEFAULT_SETTINGS, autoRemoveModels: true },
+      tempDir,
+    )
+    expect(result.removed).toBe(1)
+
+    const updatedRaw = await readFile(configPath, 'utf8')
+    const updated = JSON.parse(updatedRaw)
+    expect(updated.providers[0].models).toHaveLength(1)
+    expect(updated.providers[0].models[0].id).toBe('gpt-4o')
+
+    await rm(tempDir, { recursive: true, force: true })
   })
 })

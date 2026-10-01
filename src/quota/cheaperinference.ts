@@ -680,8 +680,6 @@ export class CheaperInferenceQuotaProvider implements QuotaProvider {
    * Register with openfox-quota (via pending list, global manager, registry).
    */
   async registerProviders(registry?: PluginRegistry): Promise<void> {
-    const customSection = this.createCustomQuotaSection()
-
     // 1. Put in pending list so openfox-quota picks it up whenever it loads
     const pending = ((globalThis as any)[PENDING_PROVIDERS_KEY] ??= [])
     if (!pending.some((p: any) => p && p.id === this.id)) {
@@ -699,16 +697,10 @@ export class CheaperInferenceQuotaProvider implements QuotaProvider {
         globalMgr.__cheaperInferenceRegistered = true
       }
     }
-    if (globalMgr && typeof globalMgr.registerCustomSection === 'function') {
-      globalMgr.registerCustomSection(customSection)
-    }
 
-    // 3. Register via registry.registerQuotaProvider / registerCustomQuotaSection if present
+    // 3. Register via registry.registerQuotaProvider if present
     if (registry && typeof registry.registerQuotaProvider === 'function') {
       registry.registerQuotaProvider(this)
-    }
-    if (registry && typeof registry.registerCustomQuotaSection === 'function') {
-      registry.registerCustomQuotaSection(customSection)
     }
 
     // 4. Eagerly sync quota sources with openfox-quota
@@ -734,8 +726,8 @@ export class CheaperInferenceQuotaProvider implements QuotaProvider {
 
     for (const src of sources) {
       if (!src || !src.metrics || src.metrics.length === 0) continue
-      if (typeof globalMgr.submitSource === 'function') {
-        globalMgr.submitSource(src)
+      if (globalMgr.pushedSources instanceof Map) {
+        globalMgr.pushedSources.set(src.id, src)
       }
     }
   }

@@ -45,7 +45,7 @@ export class CheaperInferenceTransportAdapter implements ProviderTransportAdapte
 
     try {
       const publicUrl = this.options.publicModelsUrl ?? CHEAPERINFERENCE_PUBLIC_API
-      const response = await fetcher(publicUrl)
+      const response = await fetcher(publicUrl, { signal: AbortSignal.timeout(5000) })
       if (!response.ok) {
         throw new Error(`CheaperInference catalog HTTP error (${response.status})`)
       }
